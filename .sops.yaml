@@ -1,0 +1,11 @@
+# Chaves PÚBLICAS age, as mesmas do repo central (bernats-homelab/2026-kubernetes):
+#   wsl     age1fskv...  privada só no WSL (~/.config/sops/age/keys.txt)
+#   cluster age1kn09...  privada no Secret argocd/sops-age (o KSOPS do ArgoCD usa)
+# Nunca adicione a chave de teste do CI do central (age13jef...): ela é pública.
+# Ao mudar destinatários: `sops updatekeys <arquivo>` em cada *.sops.yaml.
+creation_rules:
+  - path_regex: (^|/)deploy/.+\.sops\.yaml$
+    unencrypted_regex: ^(apiVersion|metadata|kind|type)$
+    age: >-
+      age1fskvnv59jkjddglqvsllm3d54qtd6xl0u00utexhd0t0vddlfp8qe2plxs,
+      age1kn09fr57m2vz4jhpw6e8k9qswm0sl702h6kecry5rn0kpjyyuf4sf33yde

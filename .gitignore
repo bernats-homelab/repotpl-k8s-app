@@ -1,0 +1,15 @@
+# Segredos descriptografados e chaves
+*.dec.yaml
+*.decrypted.*
+keys.txt
+*.agekey
+
+# Kubeconfigs (contêm o nome da tailnet e credenciais)
+kubeconfig
+kubeconfig*.yaml
+kubeconfig*.yml
+*.kubeconfig
+
+# Ferramentas
+.venv/
+.cache/

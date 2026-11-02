@@ -1,0 +1,22 @@
+# Sincronizado pelo ArgoCD do repo central (bernats-homelab/2026-kubernetes), na tag
+# fixada em kubernetes/apps/values.yaml. Sem `namespace:`: ele vem do destination da
+# Application. `base` não tem Ingress (é o que roda no CI, sem tailnet).
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+labels:
+  - pairs:
+      app.kubernetes.io/name: app-template
+    includeSelectors: true
+resources:
+  - deployment.yaml
+  - service.yaml
+# Segredos com KSOPS: veja o README ("Segredos").
+# generators:
+#   - secret-generator.yaml
+# Gerenciado por scripts/set-image.sh (workflow release.yaml): sempre por digest.
+# `unreleased` só existe até o primeiro release; nenhuma tag aponta para ele.
+# Mantenha este bloco no fim do arquivo.
+images:
+  - name: app-image
+    newName: ghcr.io/bernats-homelab/repotpl-k8s-app
+    newTag: unreleased

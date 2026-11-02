@@ -1,0 +1,102 @@
+name: release
+
+# Actions → release → Run workflow (na main) com a versão vX.Y.Z:
+#   1. build + push ghcr.io/<repo>:vX.Y.Z
+#   2. grava o digest em deploy/base/kustomization.yaml e comita na main
+#   3. cria a tag vX.Y.Z nesse commit e o GitHub Release
+# Para publicar no cluster: PR no repo central trocando `targetRevision` em
+# kubernetes/apps/values.yaml (`apps.<nome>`). O resumo do job mostra o trecho.
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Versão (vX.Y.Z)
+        required: true
+        type: string
+
+permissions:
+  contents: write
+  packages: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-26.04
+    env:
+      VERSION: ${{ inputs.version }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Validar versão
+        run: |
+          [[ "${VERSION}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || {
+            echo "::error::versão '${VERSION}' fora do formato vX.Y.Z"
+            exit 1
+          }
+          if git rev-parse -q --verify "refs/tags/${VERSION}" >/dev/null; then
+            echo "::error::a tag ${VERSION} já existe"
+            exit 1
+          fi
+          echo "IMAGE=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_ENV"
+
+      - uses: docker/setup-buildx-action@v4
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build + push
+        id: build
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          push: true
+          tags: ${{ env.IMAGE }}:${{ env.VERSION }}
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.version=${{ env.VERSION }}
+            org.opencontainers.image.revision=${{ github.sha }}
+
+      - name: Digest na kustomization, commit e tag
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          ./scripts/set-image.sh "${IMAGE}@${DIGEST}"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -am "Release ${VERSION}"
+          git tag "${VERSION}"
+          git push origin HEAD:main "refs/tags/${VERSION}"
+
+      - name: GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "${VERSION}" --verify-tag --generate-notes
+
+      - name: Resumo
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          app="$(sed -nE 's/^ *app\.kubernetes\.io\/name: (.*)$/\1/p' deploy/base/kustomization.yaml)"
+          cat >>"$GITHUB_STEP_SUMMARY" <<EOF
+          ## ${VERSION}
+
+          Imagem: \`${IMAGE}@${DIGEST}\`
+
+          Para publicar no cluster, abra um PR no repo central (bernats-homelab/2026-kubernetes)
+          com o trecho abaixo em \`kubernetes/apps/values.yaml\`:
+
+          \`\`\`yaml
+          apps:
+            ${app}:
+              repoURL: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}
+              targetRevision: ${VERSION}
+          \`\`\`
+          EOF

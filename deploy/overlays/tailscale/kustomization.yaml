@@ -1,0 +1,6 @@
+# Usado no notebook (tailscaleOperator.enabled no repo central): base + Ingress na tailnet.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../base
+  - ingress.yaml

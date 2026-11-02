@@ -1,0 +1,11 @@
+version: 2
+updates:
+  # Imagem base do Dockerfile (o digest é atualizado junto com a tag)
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: weekly
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly

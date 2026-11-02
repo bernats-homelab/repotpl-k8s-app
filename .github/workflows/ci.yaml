@@ -1,0 +1,91 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    runs-on: ubuntu-26.04
+    steps:
+      - uses: actions/checkout@v7
+      - name: Ferramentas (versões fixadas)
+        run: ./scripts/setup-tools.sh && echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      - uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cache/pre-commit
+            .cache/kubeconform
+          key: lint-${{ hashFiles('.pre-commit-config.yaml') }}
+      - name: pre-commit (mesma config do WSL)
+        run: pre-commit run --all-files --show-diff-on-failure
+      - name: Placeholder trocado (scripts/init.sh)
+        if: github.repository != 'bernats-homelab/repotpl-k8s-app'
+        run: |
+          if git grep -n 'app-template' -- deploy app; then
+            echo "::error::Rode scripts/init.sh <nome> neste repo gerado a partir do template."
+            exit 1
+          fi
+
+  # Sobe um k3s no runner (mesma versão do repo central), com a imagem construída aqui,
+  # e confere que deploy/base fica Available e responde /healthz.
+  e2e:
+    needs: [lint]
+    runs-on: ubuntu-26.04
+    timeout-minutes: 20
+    env:
+      K3S_VERSION: v1.37.1+k3s1
+      K3S_INSTALL_SHA256: ed01f89fd977bf20ac1516bbebf8370bf3ddbaa55dac8aba610956a4c78cc00b
+      CI_IMAGE: docker.io/library/app-ci:${{ github.sha }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: Ferramentas (versões fixadas)
+        run: ./scripts/setup-tools.sh kustomize && echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: k3s (versão e sha256 do instalador fixados)
+        run: |
+          curl -fsSL --retry 3 -o "${RUNNER_TEMP}/k3s-install.sh" \
+            "https://raw.githubusercontent.com/k3s-io/k3s/${K3S_VERSION//+/%2B}/install.sh"
+          echo "${K3S_INSTALL_SHA256}  ${RUNNER_TEMP}/k3s-install.sh" | sha256sum --check -
+          sudo INSTALL_K3S_VERSION="${K3S_VERSION}" INSTALL_K3S_EXEC="server --disable traefik" \
+            sh "${RUNNER_TEMP}/k3s-install.sh"
+          sudo k3s kubectl wait --for=condition=Ready node --all --timeout=300s
+
+      - name: Build da imagem e import no k3s
+        run: |
+          docker build -t "${CI_IMAGE}" .
+          docker save "${CI_IMAGE}" | sudo k3s ctr images import -
+
+      - name: Aplicar deploy/base com a imagem do CI
+        run: |
+          work="$(mktemp -d)"
+          cp -r deploy "${work}/"
+          ./scripts/set-image.sh "${CI_IMAGE}" "${work}/deploy/base/kustomization.yaml"
+          sudo k3s kubectl create namespace ci
+          ./scripts/kustomize-build.sh "${work}/deploy/base" | sudo k3s kubectl -n ci apply -f -
+
+      - name: Deployment Available e /healthz
+        run: |
+          kubectl() { sudo k3s kubectl "$@"; }
+          kubectl -n ci wait deployment --all --for=condition=Available --timeout=300s
+          svc="$(kubectl -n ci get service -o jsonpath='{.items[0].metadata.name}')"
+          body="$(kubectl get --raw "/api/v1/namespaces/ci/services/${svc}:http/proxy/healthz")"
+          [[ "${body}" == "ok" ]] || {
+            echo "::error::/healthz respondeu '${body}'"
+            exit 1
+          }
+
+      - name: Diagnóstico
+        if: failure()
+        run: |
+          sudo k3s kubectl -n ci get all -o wide || true
+          sudo k3s kubectl -n ci describe pods || true
+          sudo k3s kubectl -n ci logs -l app.kubernetes.io/name --all-containers --tail=100 || true
