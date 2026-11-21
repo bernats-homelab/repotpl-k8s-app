@@ -1,0 +1,10 @@
+# Postgres pelo operador CloudNativePG, para clusters que têm o operador instalado.
+# Cria o `Cluster` e liga o DATABASE_URL do app ao secret que o CNPG gera
+# (`<cluster>-app`, chave `uri`), no lugar do contrato genérico `app-template-db`.
+# Para outro Postgres, troque este componente por outro que cumpra o contrato da base.
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+resources:
+  - cluster.yaml
+patches:
+  - path: database-url.yaml
