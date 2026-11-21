@@ -4,3 +4,9 @@ kind: Kustomization
 resources:
   - ../../base
   - ingress.yaml
+# Postgres pelo CNPG do cluster e o backup dele (descomente juntos; veja o README,
+# "Banco de dados" e "Backup do banco"). O backup precisa do secret app-template-db-s3,
+# criptografado em backup-s3.sops.yaml e listado em secret-generator.yaml.
+# components:
+#   - ../../components/postgres-cnpg
+#   - ../../components/postgres-backup

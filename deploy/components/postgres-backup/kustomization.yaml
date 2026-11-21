@@ -1,0 +1,22 @@
+# Backup do Postgres (requer o componente postgres-cnpg): backup base diário às 02:00 e
+# arquivamento contínuo do WAL no RustFS do cluster (s3://cnpg/<namespace>/), com janela de
+# 14 dias para restore em qualquer ponto (ADR 014 do repo central, Bemesko/homelab).
+# As credenciais vêm do secret `app-template-db-s3` (usuário RustFS `cnpg-<namespace>`),
+# criptografado no overlay: veja o README ("Backup do banco").
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+resources:
+  - objectstore.yaml
+  - scheduledbackup.yaml
+patches:
+  - target:
+      kind: Cluster
+      name: app-template-db
+    patch: |
+      - op: add
+        path: /spec/plugins
+        value:
+          - name: barman-cloud.cloudnative-pg.io
+            isWALArchiver: true
+            parameters:
+              barmanObjectName: app-template-db-backup

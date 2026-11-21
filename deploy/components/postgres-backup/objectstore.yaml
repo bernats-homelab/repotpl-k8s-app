@@ -1,0 +1,34 @@
+# Onde o sidecar barman-cloud grava. O namespace do app é o nome dele (Application do repo
+# central), e o usuário cnpg-<namespace> só alcança s3://cnpg/<namespace>/.
+apiVersion: barmancloud.cnpg.io/v1
+kind: ObjectStore
+metadata:
+  name: app-template-db-backup
+spec:
+  # Janela de recuperação: mantém o backup base mais novo com mais de 14 dias e tudo depois dele.
+  retentionPolicy: 14d
+  configuration:
+    destinationPath: s3://cnpg/app-template/
+    endpointURL: http://rustfs-svc.rustfs.svc:9000
+    s3AddressingStyle: path
+    s3Credentials:
+      accessKeyId:
+        name: app-template-db-s3
+        key: ACCESS_KEY_ID
+      secretAccessKey:
+        name: app-template-db-s3
+        key: ACCESS_SECRET_KEY
+    wal:
+      compression: zstd
+    data:
+      compression: zstd
+  instanceSidecarConfiguration:
+    env:
+      # O boto3 recente manda checksums que servidores S3 fora da AWS podem rejeitar.
+      - name: AWS_REQUEST_CHECKSUM_CALCULATION
+        value: when_required
+      - name: AWS_RESPONSE_CHECKSUM_VALIDATION
+        value: when_required
+    resources:
+      requests: {cpu: 10m, memory: 64Mi}
+      limits: {memory: 256Mi}

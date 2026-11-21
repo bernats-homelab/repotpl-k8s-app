@@ -1,0 +1,16 @@
+# Backup base diário às 02:00, antes da réplica do NAS (03:00). Não use `immediate: true`:
+# ele dispara enquanto o pod do Postgres ainda reinicia para ganhar o sidecar e falha com
+# "requested plugin is not available"; o primeiro backup sai na madrugada seguinte (o WAL já
+# está sendo arquivado desde a subida).
+apiVersion: postgresql.cnpg.io/v1
+kind: ScheduledBackup
+metadata:
+  name: app-template-db-daily
+spec:
+  schedule: "0 0 2 * * *"
+  backupOwnerReference: self
+  method: plugin
+  pluginConfiguration:
+    name: barman-cloud.cloudnative-pg.io
+  cluster:
+    name: app-template-db

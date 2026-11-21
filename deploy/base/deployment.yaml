@@ -20,6 +20,16 @@ spec:
         - name: app
           # Resolvido por `images:` na kustomization (digest gravado pelo release).
           image: app-image
+          env:
+            # Contrato de banco: sem o secret, o pod sobe assim mesmo (optional), como o e2e do
+            # repo central exige (ele sincroniza deploy/base quando não há Tailscale). O
+            # componente postgres-cnpg liga esta variável ao secret do CNPG, obrigatório.
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: app-template-db
+                  key: DATABASE_URL
+                  optional: true
           ports:
             - name: http
               containerPort: 8080

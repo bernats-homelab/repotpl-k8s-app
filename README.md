@@ -52,6 +52,39 @@ As Applications de apps externas rodam no AppProject `homelab-apps`. Ele só ace
 
 Os manifests precisam passar no `kube-linter` (`.kube-linter.yaml`): probes, requests de CPU/memória, `runAsNonRoot`, `readOnlyRootFilesystem`, capabilities removidas. Precisa escrever em disco? Monte um `emptyDir`, como o `/tmp` do exemplo.
 
+## Banco de dados
+
+O app recebe o Postgres pela variável `DATABASE_URL`. Na `base` ela vem do secret opcional `<app>-db` (chave `DATABASE_URL`): sem ele o pod sobe assim mesmo, como o e2e do repo central exige.
+
+No notebook, o componente [`postgres-cnpg`](deploy/components/postgres-cnpg) cria um `Cluster` do CloudNativePG (1 instância, 1 Gi no disco do notebook) e liga `DATABASE_URL` ao secret que o CNPG gera (`<app>-db-app`, chave `uri`). Para usar, descomente `components:` em [deploy/overlays/tailscale/kustomization.yaml](deploy/overlays/tailscale/kustomization.yaml). As migrações ficam a cargo do app.
+
+## Backup do banco
+
+O componente [`postgres-backup`](deploy/components/postgres-backup) (depende de `postgres-cnpg`) liga o backup do CNPG pelo plugin Barman Cloud, como em todos os bancos do cluster (ADR 014 do repo central):
+
+- arquivamento contínuo do WAL e backup base diário às 02:00;
+- destino: RustFS no NAS, em `s3://cnpg/<app>/`;
+- janela de 14 dias para restore em qualquer ponto.
+
+Para ligar:
+
+1. No repo central, acrescente o usuário `cnpg-<app>` (valor aleatório de 40 caracteres) em `kubernetes/workloads/rustfs/cnpg-users.sops.yaml` (`sops` no WSL). O Job de provisionamento cria o usuário com acesso só a `s3://cnpg/<app>/`.
+2. Aqui, crie `deploy/overlays/tailscale/backup-s3.sops.yaml` com a mesma chave e criptografe **no lugar** (rode `sops` na raiz do repo, que é onde ele acha o `.sops.yaml`):
+   ```yaml
+   apiVersion: v1
+   kind: Secret
+   metadata:
+     name: <app>-db-s3
+   type: Opaque
+   stringData:
+     ACCESS_KEY_ID: cnpg-<app>
+     ACCESS_SECRET_KEY: <o mesmo valor do passo 1>
+   ```
+3. Liste o arquivo em `files:` de um `secret-generator.yaml` do overlay (como em [Segredos](#segredos)) e inclua `../../components/postgres-backup` em `components:`.
+4. Release e bump da `targetRevision` no repo central. O Postgres reinicia uma vez para ganhar o sidecar. O primeiro backup base sai às 02:00, mas o WAL já é arquivado desde a subida.
+
+Restaurar é criar um `Cluster` novo com `bootstrap.recovery` a partir do `ObjectStore` (`<app>-db-backup`, `serverName: <app>-db`); veja o README do repo central.
+
 ## Segredos
 
 Os segredos são commitados criptografados (SOPS + age), e o ArgoCD os descriptografa com KSOPS usando a chave do cluster. O `.sops.yaml` já tem as chaves públicas do WSL (para editar) e do cluster (para sincronizar).

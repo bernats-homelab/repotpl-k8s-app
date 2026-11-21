@@ -1,0 +1,22 @@
+# Postgres do app, gerenciado pelo operador CloudNativePG do cluster (recurso namespaced).
+# O CNPG cria o secret `app-template-db-app` (chave `uri`), que database-url.yaml liga ao
+# DATABASE_URL. As migrações ficam a cargo do app.
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: app-template-db
+spec:
+  instances: 1
+  imageName: ghcr.io/cloudnative-pg/postgresql:18.1-minimal-trixie@sha256:b09afc1667ed571b31ce35d633fc1139a6fd1a0a25a40546e1432f4d8370e91a
+  bootstrap:
+    initdb:
+      database: app
+      owner: app
+  storage:
+    size: 1Gi
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      memory: 512Mi
