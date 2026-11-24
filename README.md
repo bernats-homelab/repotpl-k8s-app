@@ -23,6 +23,8 @@ este repo                                      repo central (2026-kubernetes)
    make test
    ```
    O CI falha enquanto o placeholder `app-template` existir em `deploy/` ou `app/`.
+
+   O script também adiciona o topic `homelab-managed` ao repo (o GitHub não copia topics nem regras do template). Se o `gh` não estiver autenticado, ele avisa e o comando é `gh repo edit <org>/<repo> --add-topic homelab-managed`. O repo só tem a `main` protegida depois do topic **e** de um `make github-apply` no repo central (ADR 020; vale só para repos públicos). A regra é leve de propósito: sem force push e sem deleção, para o `release.yaml` continuar publicando direto na `main`.
 3. **Código:** troque `app/`, `nginx.conf` e o `Dockerfile` pela sua aplicação. Mantenha:
    - usuário não-root, com o `runAsUser` correspondente em `deploy/base/deployment.yaml`;
    - porta `8080` e um endpoint `/healthz` (ou ajuste as probes e o teste do CI);

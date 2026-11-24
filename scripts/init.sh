@@ -31,5 +31,15 @@ fi
 # Imagem deste repo; o digest real entra no primeiro release (workflow release.yaml).
 scripts/set-image.sh "ghcr.io/${repo}:unreleased"
 
+# O GitHub não copia topics do template. O topic `homelab-managed` coloca o repo no escopo das regras
+# da `main` (OpenTofu no repo central, ADR 020): sem ele o repo fica sem proteção.
+readonly TOPIC="homelab-managed"
+if command -v gh >/dev/null 2>&1 && gh repo edit "${repo}" --add-topic "${TOPIC}" >/dev/null 2>&1; then
+  echo "OK: topic '${TOPIC}' adicionado a ${repo}."
+else
+  echo "ATENÇÃO: adicione o topic à mão: gh repo edit ${repo} --add-topic ${TOPIC}" >&2
+fi
+
 echo "OK: app '${name}' (imagem ghcr.io/${repo})."
 echo "Próximos passos: commit + push, depois Actions → release → version v0.1.0."
+echo "Proteção da main: no repo central, 'make github-apply' (no Pi) aplica as regras ao repo com o topic."
