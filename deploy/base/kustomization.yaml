@@ -19,4 +19,4 @@ resources:
 images:
   - name: app-image
     newName: ghcr.io/bernats-homelab/repotpl-k8s-app
-    digest: sha256:f12f99b88f142246b1de55bf0c711a0b1aaa7969c3fc66d7f7d03f171c67b192
+    digest: sha256:b85e2cf1e6afe9ecee192ba0abe7d90b14df4fe053f634429981440424409488
