@@ -4,8 +4,9 @@ name: release
 #   1. build + push ghcr.io/<repo>:vX.Y.Z
 #   2. grava o digest em deploy/base/kustomization.yaml e comita na main
 #   3. cria a tag vX.Y.Z nesse commit e o GitHub Release
-# Para publicar no cluster: PR no repo central trocando `targetRevision` em
-# kubernetes/apps/values.yaml (`apps.<nome>`). O resumo do job mostra o trecho.
+# Para publicar no cluster não há passo manual: o último passo avisa o homelab, e o Renovate
+# de lá abre (e faz o automerge do) PR com o novo `targetRevision`. Só a primeira publicação
+# de uma app nova é um PR manual; o resumo do job mostra o trecho.
 on:
   workflow_dispatch:
     inputs:
@@ -80,6 +81,12 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: gh release create "${VERSION}" --verify-tag --generate-notes
 
+      - name: Atualizar o homelab
+        uses: Bemesko/homelab/pipelines/actions/dispatch-homelab-update@main
+        with:
+          client-id: ${{ vars.HOMELAB_DISPATCH_CLIENT_ID }}
+          private-key: ${{ secrets.HOMELAB_DISPATCH_PRIVATE_KEY }}
+
       - name: Resumo
         env:
           DIGEST: ${{ steps.build.outputs.digest }}
@@ -90,8 +97,8 @@ jobs:
 
           Imagem: \`${IMAGE}@${DIGEST}\`
 
-          Para publicar no cluster, abra um PR no repo central (bernats-homelab/2026-kubernetes)
-          com o trecho abaixo em \`kubernetes/apps/values.yaml\`:
+          Se a app já está no cluster, o homelab abre o PR sozinho. Para uma app nova, abra um PR
+          em Bemesko/homelab com o trecho abaixo em \`kubernetes/apps/values.yaml\`:
 
           \`\`\`yaml
           apps:
